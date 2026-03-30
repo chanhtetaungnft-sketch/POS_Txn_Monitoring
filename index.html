@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>POS Transaction Monitoring</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg,#f5f7fa,#e4ecf7);
+    padding: 30px;
+}
+
+h1 {
+    text-align: center;
+    font-size: 34px;
+}
+
+#searchBox {
+    display: block;
+    margin: 20px auto;
+    padding: 15px;
+    width: 420px;
+    border-radius: 20px;
+    border: none;
+    font-size: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+#suggestionBox {
+    width: 420px;
+    margin: auto;
+    background: white;
+    border-radius: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.suggestion {
+    padding: 10px;
+    cursor: pointer;
+}
+.suggestion:hover {
+    background: #eee;
+}
+
+.card {
+    background: rgba(255,255,255,0.6);
+    backdrop-filter: blur(15px);
+    border-radius: 20px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.kpi-container {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.kpi {
+    flex: 1;
+    text-align: center;
+    padding: 15px;
+    border-radius: 15px;
+    background: rgba(255,255,255,0.5);
+}
+
+table {
+    width: 100%;
+}
+td, th {
+    padding: 8px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>POS Transaction Monitoring</h1>
+
+<input type="text" id="searchBox" placeholder="🔍 Search HQ ID / Terminal ID / Store Name">
+<div id="suggestionBox"></div>
+
+<div id="result"></div>
+<canvas id="chart" height="100"></canvas>
+
+<script>
+let sheetData = [];
+let chart;
+
+const API_URL = "https://script.google.com/macros/s/AKfycbwq_1e2XQMzJxB7aldgptnX1_gRfVD2RYFhCxVOmInuF4uFdEwWf5h6lay7CgM6dTzu/exec";
+
+// load data
+fetch(API_URL)
+.then(res => res.json())
+.then(data => {
+    sheetData = data;
+    console.log("Loaded:", data.length);
+});
+
+// format
+function formatNumber(num){
+    return Number(num || 0).toLocaleString();
+}
+
+// search
+const searchBox = document.getElementById("searchBox");
+const suggestionBox = document.getElementById("suggestionBox");
+
+searchBox.addEventListener("keyup", function(){
+
+    const keyword = this.value.trim().toLowerCase();
+    suggestionBox.innerHTML = "";
+
+    if(sheetData.length === 0) return;
+    if(keyword.length < 1) return;
+
+    let filtered = sheetData.filter(item => {
+
+        const hq = String(item["HQ ID"] || "").toLowerCase();
+        const terminal = String(item["Terminal ID"] || "").toLowerCase();
+        const name = String(item["Store Name"] || "").toLowerCase();
+
+        return hq.includes(keyword) || terminal.includes(keyword) || name.includes(keyword);
+    });
+
+    filtered.slice(0,10).forEach(item=>{
+        let div = document.createElement("div");
+        div.className = "suggestion";
+        div.innerText = item["Store Name"] + " (" + item["HQ ID"] + ")";
+
+        div.onclick = ()=>{
+            showResult(item);
+            suggestionBox.innerHTML="";
+        };
+
+        suggestionBox.appendChild(div);
+    });
+});
+
+// show result
+function showResult(item){
+
+let totalCount =
+    Number(item["Jan Count"]||0) +
+    Number(item["Feb Count"]||0) +
+    Number(item["March Count"]||0);
+
+let totalVol =
+    Number(item["Jan Volume"]||0) +
+    Number(item["Feb Volume"]||0) +
+    Number(item["March Volume"]||0);
+
+document.getElementById("result").innerHTML = `
+<div class="card">
+<h2>${item["Store Name"]}</h2>
+<p>HQ ID: ${item["HQ ID"]}</p>
+<p>Terminal ID: ${item["Terminal ID"]}</p>
+
+<div class="kpi-container">
+<div class="kpi">
+<h3>${formatNumber(totalCount)}</h3>
+<p>Total Count</p>
+</div>
+<div class="kpi">
+<h3>${formatNumber(totalVol)}</h3>
+<p>Total Volume</p>
+</div>
+</div>
+
+<table>
+<tr><th>Month</th><th>Count</th><th>Volume</th></tr>
+
+<tr>
+<td>Jan</td>
+<td>${formatNumber(item["Jan Count"])}</td>
+<td>${formatNumber(item["Jan Volume"])}</td>
+</tr>
+
+<tr>
+<td>Feb</td>
+<td>${formatNumber(item["Feb Count"])}</td>
+<td>${formatNumber(item["Feb Volume"])}</td>
+</tr>
+
+<tr>
+<td>March</td>
+<td>${formatNumber(item["March Count"])}</td>
+<td>${formatNumber(item["March Volume"])}</td>
+</tr>
+
+</table>
+</div>`;
+
+// chart
+let ctx = document.getElementById("chart").getContext("2d");
+
+if(chart) chart.destroy();
+
+chart = new Chart(ctx,{
+    type:'bar',
+    data:{
+        labels:["Jan","Feb","March"],
+        datasets:[{
+            label:"Volume",
+            data:[
+                item["Jan Volume"]||0,
+                item["Feb Volume"]||0,
+                item["March Volume"]||0
+            ]
+        }]
+    }
+});
+}
+</script>
+
+</body>
+</html>
